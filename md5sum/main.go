@@ -37,11 +37,11 @@ func server(address string, wait chan<- string) {
 		} else if conn.CloseWrite() != nil {
 			log.Fatal(err)
 		} else {
-			md5 := md5.New()
-			io.Copy(md5, conn)
+			hash := md5.New()
+			io.Copy(hash, conn)
 			conn.Close()
 			listener.Close()
-			wait <- fmt.Sprintf("%x", md5.Sum(nil))
+			wait <- fmt.Sprintf("%x", hash.Sum(nil))
 			close(wait)
 		}
 	}
@@ -58,14 +58,24 @@ func main() {
 		log.Fatal(err)
 	} else if conn, err := net.Dial(network, address); err != nil {
 		log.Fatal(err)
+	} else if info, err := file.Stat(); err != nil {
+		log.Fatal(err)
 	} else {
-		buf := make([]byte, 65536)
+		total := info.Size()
+		count := int64(0)
+		progress := int64(0)
+		buf := make([]byte, 8192)
 		for {
 			if n, err := file.Read(buf); err != nil {
 				break
 			} else {
 				conn.Write([]byte(fmt.Sprintf("%x", buf[:n])))
-				<-time.After(10 * time.Millisecond)
+				count += int64(n)
+				if (count * 100 / total) > progress {
+					progress = count * 100 / total
+					log.Printf("progress: %3d %%\n", progress)
+				}
+				<-time.After(50 * time.Millisecond)
 			}
 		}
 		conn.Close()
